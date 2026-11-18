@@ -1,0 +1,19 @@
+{
+  "name": "{{APP_NAME}}",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@prometheus-io/client": "^0.16.1",
+    "express": "^4.22.3"
+  }
+}

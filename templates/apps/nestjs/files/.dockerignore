@@ -1,0 +1,14 @@
+node_modules
+npm-debug.log*
+.git
+.gitignore
+.orbit
+.orbit-reports
+test
+coverage
+dist
+Dockerfile
+.dockerignore
+.env
+.env.*
+*.md

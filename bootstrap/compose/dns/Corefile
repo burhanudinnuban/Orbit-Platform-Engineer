@@ -1,0 +1,9 @@
+# Upstream DNS for the pods in k3s (docker-compose.yml, service dns).
+# 127.0.0.11 is Docker's embedded DNS inside this container: it answers the
+# Compose service names (gitea, floci, registry...) and forwards every other
+# name to the host's resolvers.
+.:53 {
+    errors
+    forward . 127.0.0.11
+    cache 30
+}

@@ -1,0 +1,3 @@
+pytest==9.1.1
+# HTTP client used by FastAPI's TestClient (Starlette deprecated plain httpx for this).
+httpx2==2.16.0

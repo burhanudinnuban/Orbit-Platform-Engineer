@@ -1,0 +1,26 @@
+# kind cluster for Orbit local development.
+# Created by bootstrap/up.mjs:  kind create cluster --config bootstrap/kind-config.yaml
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: orbit
+# Local registry support (https://kind.sigs.k8s.io/docs/user/local-registry/):
+# containerd reads per-registry mirror config from /etc/containerd/certs.d,
+# where up.mjs writes localhost:5001 -> http://kind-registry:5000.
+containerdConfigPatches:
+  - |-
+    [plugins."io.containerd.grpc.v1.cri".registry]
+      config_path = "/etc/containerd/certs.d"
+nodes:
+  - role: control-plane
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-labels: "ingress-ready=true"
+    extraPortMappings:
+      # Traefik binds hostPort 80 on this node; reach it from Windows at http://*.localtest.me:8080
+      - containerPort: 80
+        hostPort: 8080
+        listenAddress: "127.0.0.1"
+        protocol: TCP

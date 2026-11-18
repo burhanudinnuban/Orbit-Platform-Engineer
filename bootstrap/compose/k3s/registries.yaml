@@ -1,0 +1,10 @@
+# containerd in k3s pulls app images from the registry container.
+#   CI pushes          registry:5000/<app>:<sha>    (REGISTRY_PUSH, from pods)
+#   Deployments use    localhost:5001/<app>:<sha>   (REGISTRY_PULL, the same name as on the host)
+mirrors:
+  "localhost:5001":
+    endpoint:
+      - "http://registry:5000"
+  "registry:5000":
+    endpoint:
+      - "http://registry:5000"

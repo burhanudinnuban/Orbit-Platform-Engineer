@@ -1,0 +1,19 @@
+node_modules
+portal/node_modules
+dist
+portal/dist
+.git
+.vscode
+.idea
+# Local state and secrets never go into the image; Compose passes .env at runtime.
+.orbit-data
+.env
+.env.*
+# Platform tooling runs on the host, not inside the image.
+bootstrap
+docker-compose.yml
+docs
+test
+**/.terraform
+**/*.tfstate*
+docker-compose.override.yml

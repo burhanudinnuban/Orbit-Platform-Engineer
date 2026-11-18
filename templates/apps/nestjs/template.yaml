@@ -1,0 +1,5 @@
+id: nestjs
+name: NestJS service
+description: NestJS API with Prometheus metrics, health checks and tests
+port: 8080
+languages: [typescript, javascript]

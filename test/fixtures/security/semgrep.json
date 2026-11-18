@@ -1,0 +1,84 @@
+{
+  "version": "1.85.0",
+  "results": [
+    {
+      "check_id": "javascript.express.security.audit.xss.direct-response-write.direct-response-write",
+      "path": "src/index.js",
+      "start": { "line": 42, "col": 5, "offset": 1203 },
+      "end": { "line": 42, "col": 30, "offset": 1228 },
+      "extra": {
+        "message": "Detected directly writing to a Response object from user-defined input. This bypasses any HTML escaping and may expose your application to a Cross-Site-scripting (XSS) vulnerability. Instead, use 'resp.render()' to render safely escaped HTML.",
+        "metadata": {
+          "cwe": ["CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"],
+          "confidence": "MEDIUM",
+          "impact": "MEDIUM",
+          "likelihood": "MEDIUM",
+          "category": "security"
+        },
+        "severity": "WARNING",
+        "fingerprint": "requires login",
+        "lines": "requires login"
+      }
+    },
+    {
+      "check_id": "javascript.lang.security.audit.code-string-concat.code-string-concat",
+      "path": "./src/eval.js",
+      "start": { "line": 10, "col": 3, "offset": 210 },
+      "end": { "line": 10, "col": 28, "offset": 235 },
+      "extra": {
+        "message": "Found data from an Express or Next web request flowing to `eval`. If this data is user-controllable this can lead to execution of arbitrary system commands in the context of your application process.",
+        "metadata": {
+          "cwe": "CWE-95: Improper Neutralization of Directives in Dynamically Evaluated Code ('Eval Injection')",
+          "confidence": "HIGH",
+          "impact": "HIGH",
+          "likelihood": "MEDIUM",
+          "category": "security"
+        },
+        "severity": "ERROR"
+      }
+    },
+    {
+      "check_id": "javascript.express.security.injection.tainted-sql-string.tainted-sql-string",
+      "path": "/workspace/src/db.js",
+      "start": { "line": 17, "col": 9, "offset": 402 },
+      "end": { "line": 17, "col": 61, "offset": 454 },
+      "extra": {
+        "message": "Detected user input used to manually construct a SQL string. This is usually bad practice because manual construction could accidentally result in a SQL injection.",
+        "metadata": {
+          "cwe": ["CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"],
+          "confidence": "LOW",
+          "impact": "HIGH",
+          "category": "security"
+        },
+        "severity": "ERROR"
+      }
+    },
+    {
+      "check_id": "javascript.lang.best-practice.leftover_debugging.javascript-debugger",
+      "path": "src\\routes\\health.js",
+      "start": { "line": 5, "col": 1, "offset": 88 },
+      "end": { "line": 5, "col": 9, "offset": 96 },
+      "extra": {
+        "message": "Found a leftover debugger statement.",
+        "metadata": { "category": "best-practice" },
+        "severity": "INFO"
+      }
+    },
+    {
+      "check_id": "javascript.express.security.audit.xss.direct-response-write.direct-response-write",
+      "path": "src/index.js",
+      "start": { "line": 42, "col": 5, "offset": 1203 },
+      "end": { "line": 42, "col": 30, "offset": 1228 },
+      "extra": {
+        "message": "Detected directly writing to a Response object from user-defined input.",
+        "metadata": { "confidence": "MEDIUM", "impact": "MEDIUM" },
+        "severity": "WARNING"
+      }
+    },
+    { "check_id": 5 },
+    "not-a-result",
+    null
+  ],
+  "errors": [],
+  "paths": { "scanned": ["src/index.js", "src/eval.js", "src/db.js", "src/routes/health.js"] }
+}

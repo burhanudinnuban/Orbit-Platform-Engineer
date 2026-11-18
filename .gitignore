@@ -1,0 +1,21 @@
+node_modules
+dist
+
+# Secrets and local state written by `npm run bootstrap` and the API
+.env
+.orbit-data
+
+# Terraform working files (the runner uses the Kubernetes backend)
+.terraform
+*.tfstate
+*.tfstate.*
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.log
+
+# Image versions an admin chose in the portal (Platform → Versions); local to this machine.
+docker-compose.override.yml

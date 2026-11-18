@@ -1,0 +1,61 @@
+# Prometheus runs in Docker Compose, outside the cluster, and pod IPs are not
+# reachable from there. It discovers pods and nodes through the API server and
+# scrapes them through the API server proxy, as ServiceAccount
+# orbit-system/prometheus. setup.sh copies this token to the prometheus-k8s volume.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus
+  namespace: orbit-system
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/managed-by: orbit
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: prometheus-token
+  namespace: orbit-system
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/managed-by: orbit
+  annotations:
+    kubernetes.io/service-account.name: prometheus
+type: kubernetes.io/service-account-token
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: orbit-prometheus
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/managed-by: orbit
+rules:
+  - apiGroups: [""]
+    resources: ["nodes", "nodes/proxy", "nodes/metrics", "services", "endpoints", "pods"]
+    verbs: ["get", "list", "watch"]
+  # Scraping goes through /api/v1/namespaces/<ns>/pods/<pod>:<port>/proxy/<path>.
+  - apiGroups: [""]
+    resources: ["pods/proxy"]
+    verbs: ["get"]
+  - apiGroups: ["discovery.k8s.io"]
+    resources: ["endpointslices"]
+    verbs: ["get", "list", "watch"]
+  - nonResourceURLs: ["/metrics"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: orbit-prometheus
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/managed-by: orbit
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: orbit-prometheus
+subjects:
+  - kind: ServiceAccount
+    name: prometheus
+    namespace: orbit-system

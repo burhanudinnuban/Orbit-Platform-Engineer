@@ -1,0 +1,172 @@
+# Gitea: Git hosting for app repositories and the gitops repo.
+# Headless install: INSTALL_LOCK skips the web installer. bootstrap/up.mjs
+# creates Secret gitea-secrets first and the orbit-admin user afterwards.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gitea-data
+  namespace: orbit-system
+  labels:
+    app.kubernetes.io/name: gitea
+    app.kubernetes.io/managed-by: orbit
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gitea
+  namespace: orbit-system
+  labels:
+    app.kubernetes.io/name: gitea
+    app.kubernetes.io/managed-by: orbit
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: gitea
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: gitea
+    spec:
+      securityContext:
+        fsGroup: 1000
+      containers:
+        - name: gitea
+          image: gitea/gitea:1.22.3
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          env:
+            - name: USER_UID
+              value: "1000"
+            - name: USER_GID
+              value: "1000"
+            - name: GITEA__database__DB_TYPE
+              value: sqlite3
+            - name: GITEA__database__PATH
+              value: /data/gitea/gitea.db
+            - name: GITEA__server__DOMAIN
+              value: git.localtest.me
+            - name: GITEA__server__HTTP_PORT
+              value: "3000"
+            - name: GITEA__server__ROOT_URL
+              value: http://git.localtest.me:8080/
+            - name: GITEA__server__DISABLE_SSH
+              value: "true"
+            - name: GITEA__server__START_SSH_SERVER
+              value: "false"
+            - name: GITEA__server__OFFLINE_MODE
+              value: "true"
+            - name: GITEA__server__LFS_START_SERVER
+              value: "false"
+            - name: GITEA__security__INSTALL_LOCK
+              value: "true"
+            - name: GITEA__security__SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: gitea-secrets
+                  key: secret-key
+            - name: GITEA__security__INTERNAL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: gitea-secrets
+                  key: internal-token
+            - name: GITEA__service__DISABLE_REGISTRATION
+              value: "true"
+            - name: GITEA__service__REQUIRE_SIGNIN_VIEW
+              value: "false"
+            # Basic auth is needed by the bootstrap to mint the first API token.
+            - name: GITEA__service__ENABLE_BASIC_AUTHENTICATION
+              value: "true"
+            - name: GITEA__repository__DEFAULT_BRANCH
+              value: main
+            - name: GITEA__repository__DEFAULT_PRIVATE
+              value: "private"
+            - name: GITEA__webhook__ALLOWED_HOST_LIST
+              value: "*"
+            - name: GITEA__webhook__SKIP_TLS_VERIFY
+              value: "true"
+            - name: GITEA__webhook__DELIVER_TIMEOUT
+              value: "10"
+            # Orbit runs its own CI engine; Gitea Actions stays off.
+            - name: GITEA__actions__ENABLED
+              value: "false"
+            # _0X2E_ encodes "." in a section name ([cron.update_checker]).
+            - name: GITEA__cron_0X2E_update_checker__ENABLED
+              value: "false"
+            - name: GITEA__log__LEVEL
+              value: Info
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            httpGet:
+              path: /api/healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /api/healthz
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: gitea-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gitea
+  namespace: orbit-system
+  labels:
+    app.kubernetes.io/name: gitea
+    app.kubernetes.io/managed-by: orbit
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: gitea
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gitea
+  namespace: orbit-system
+  labels:
+    app.kubernetes.io/name: gitea
+    app.kubernetes.io/managed-by: orbit
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: git.localtest.me
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gitea
+                port:
+                  name: http

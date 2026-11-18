@@ -1,0 +1,109 @@
+# Identities for Orbit's in-cluster jobs.
+#
+# orbit-terraform runs `terraform apply/destroy` for terraform/modules/app-namespace.
+# It can manage exactly the kinds that module creates, cluster-wide (app
+# namespaces are created on demand), and keeps Terraform state (Secrets) and
+# state locks (Leases) in orbit-system.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: orbit-terraform
+  namespace: orbit-system
+  labels:
+    app.kubernetes.io/name: orbit-terraform
+    app.kubernetes.io/managed-by: orbit
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: orbit-terraform
+  labels:
+    app.kubernetes.io/name: orbit-terraform
+    app.kubernetes.io/managed-by: orbit
+rules:
+  - apiGroups: [""]
+    resources:
+      - namespaces
+      - resourcequotas
+      - limitranges
+      - serviceaccounts
+      - secrets
+      - services
+      - persistentvolumeclaims
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Read-only: lets the provider wait for StatefulSet pods to roll out.
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["statefulsets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: orbit-terraform
+  labels:
+    app.kubernetes.io/name: orbit-terraform
+    app.kubernetes.io/managed-by: orbit
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: orbit-terraform
+subjects:
+  - kind: ServiceAccount
+    name: orbit-terraform
+    namespace: orbit-system
+---
+# Terraform Kubernetes backend: state Secret tfstate-default-<app>-<env> and
+# its lock Lease, both in orbit-system.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: orbit-terraform-state
+  namespace: orbit-system
+  labels:
+    app.kubernetes.io/name: orbit-terraform
+    app.kubernetes.io/managed-by: orbit
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: orbit-terraform-state
+  namespace: orbit-system
+  labels:
+    app.kubernetes.io/name: orbit-terraform
+    app.kubernetes.io/managed-by: orbit
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: orbit-terraform-state
+subjects:
+  - kind: ServiceAccount
+    name: orbit-terraform
+    namespace: orbit-system
+---
+# Pipeline job pods run as orbit-ci-runner. They never call the Kubernetes
+# API, so the token is not mounted and there are no role bindings.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: orbit-ci-runner
+  namespace: orbit-ci
+  labels:
+    app.kubernetes.io/name: orbit-ci-runner
+    app.kubernetes.io/managed-by: orbit
+automountServiceAccountToken: false

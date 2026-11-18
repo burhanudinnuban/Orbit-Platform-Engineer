@@ -1,0 +1,106 @@
+import client from '@prometheus-io/client';
+import express, { type ErrorRequestHandler, type Express } from 'express';
+
+const SECURITY_HEADERS: Record<string, string> = {
+  'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'",
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Referrer-Policy': 'no-referrer',
+  'Permissions-Policy': 'camera=(), geolocation=(), microphone=(), payment=(), usb=()',
+  'Cache-Control': 'no-store',
+  'Cross-Origin-Opener-Policy': 'same-origin',
+  'Cross-Origin-Resource-Policy': 'same-origin',
+  'Cross-Origin-Embedder-Policy': 'require-corp',
+};
+
+export interface AppOptions {
+  serviceName?: string;
+}
+
+export interface Service {
+  app: Express;
+  registry: client.Registry;
+  setReady(value: boolean): void;
+}
+
+/**
+ * Builds the HTTP app. Every instance gets its own metrics registry, so tests
+ * can create as many as they like.
+ */
+export function createApp({ serviceName = process.env.ORBIT_APP || '{{APP_NAME}}' }: AppOptions = {}): Service {
+  const registry = new client.Registry();
+  client.collectDefaultMetrics({ register: registry });
+
+  const httpRequests = new client.Counter({
+    name: 'http_requests_total',
+    help: 'HTTP requests handled, by method, matched route and status code',
+    labelNames: ['method', 'route', 'status'] as const,
+    registers: [registry],
+  });
+  const httpDuration = new client.Histogram({
+    name: 'http_request_duration_seconds',
+    help: 'HTTP request latency in seconds, by method, matched route and status code',
+    labelNames: ['method', 'route', 'status'] as const,
+    buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
+    registers: [registry],
+  });
+
+  let ready = true;
+  const app = express();
+  app.disable('x-powered-by');
+
+  app.use((req, res, next) => {
+    res.set(SECURITY_HEADERS);
+    next();
+  });
+
+  // Label by the matched route pattern (e.g. /items/:id), never the raw URL,
+  // so metric cardinality stays bounded.
+  app.use((req, res, next) => {
+    const stop = httpDuration.startTimer();
+    res.on('finish', () => {
+      const route = req.route ? `${req.baseUrl}${String(req.route.path)}` : 'unmatched';
+      const labels = { method: req.method, route, status: String(res.statusCode) };
+      httpRequests.inc(labels);
+      stop(labels);
+    });
+    next();
+  });
+
+  app.get('/', (req, res) => {
+    res.json({ service: serviceName, status: 'ok', environment: process.env.ORBIT_ENV ?? 'local' });
+  });
+
+  app.get('/healthz', (req, res) => {
+    res.json({ status: 'ok' });
+  });
+
+  app.get('/readyz', (req, res) => {
+    if (ready) res.json({ status: 'ready' });
+    else res.status(503).json({ status: 'shutting-down' });
+  });
+
+  app.get('/metrics', async (req, res) => {
+    res.set('Content-Type', registry.contentType);
+    res.end(await registry.metrics());
+  });
+
+  app.use((req, res) => {
+    res.status(404).json({ error: 'not found' });
+  });
+
+  const onError: ErrorRequestHandler = (err: unknown, req, res, _next) => {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(JSON.stringify({ level: 'error', msg: 'unhandled error', error: message }));
+    res.status(500).json({ error: 'internal error' });
+  };
+  app.use(onError);
+
+  return {
+    app,
+    registry,
+    setReady(value) {
+      ready = value;
+    },
+  };
+}

@@ -1,0 +1,17 @@
+dist
+node_modules
+package-lock.json
+.orbit-data
+
+# Starting code of user repositories, in their own style. Anchored with a
+# leading slash so src/features/templates and src/features/terraform still format.
+/templates
+/test/fixtures
+
+# Prose, manifests, Terraform and stylesheets keep their hand formatting.
+*.md
+*.yaml
+*.yml
+*.css
+*.html
+/terraform

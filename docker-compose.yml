@@ -1,0 +1,331 @@
+# Orbit platform on Docker Compose: every service Orbit needs, on one machine.
+#
+#   npm run bootstrap                 first run, and after any change: secrets into .env,
+#                                     `docker compose up -d`, Gitea admin/token/orgs/gitops
+#                                     repo, kube context orbit-compose (safe to re-run)
+#   npm run bootstrap -- --orbit      the same, plus the Orbit API and portal in a container
+#   npm run dev                       or run the API (:4000) and portal (:5173) on the host
+#   docker compose ps | logs -f <service> | stop | start
+#   npm run teardown -- --yes         delete the containers, the volumes and the kube context
+#
+# Compose reads .env (written by the bootstrap) for the ${...} values below.
+#
+#                         127.0.0.1:8080  (*.localtest.me)
+#                                  │
+#                         traefik (edge proxy)
+#      ┌─────────────┬─────────────┼──────────────┬──────────────────────┐
+#    gitea        grafana      prometheus       floci          k3s :80 → in-cluster Traefik
+#    git.*        grafana.*    prometheus.*     aws.*          → <app>-<env>.* (app Ingresses)
+#
+# k3s is the Kubernetes cluster. CI jobs, Terraform jobs and the apps run there.
+# Pods resolve names through the dns service, so they reach gitea, floci and
+# registry by their Compose names, and the internet through the host's resolvers.
+
+name: orbit
+
+services:
+  # ── Kubernetes ──────────────────────────────────────────────────────────────
+  k3s:
+    image: rancher/k3s:v1.31.4-k3s1
+    command:
+      - server
+      - --node-name=orbit
+      # The in-cluster Traefik (bootstrap/manifests/10-traefik.yaml) schedules on this label.
+      - --node-label=ingress-ready=true
+      # Orbit brings its own ingress, and the edge proxy replaces the service load balancer.
+      - --disable=traefik
+      - --disable=servicelb
+      - --disable=metrics-server
+      # The API certificate must be valid from the host (127.0.0.1) and from containers (k3s).
+      - --tls-san=k3s
+      - --tls-san=127.0.0.1
+      - --resolv-conf=/etc/orbit/resolv.conf
+    privileged: true
+    tmpfs:
+      - /run
+      - /var/run
+    ulimits:
+      nproc: 65535
+      nofile:
+        soft: 65535
+        hard: 65535
+    environment:
+      K3S_KUBECONFIG_OUTPUT: /output/kubeconfig.yaml
+      K3S_KUBECONFIG_MODE: '644'
+    configs:
+      - source: k3s-resolv-conf
+        target: /etc/orbit/resolv.conf
+    volumes:
+      - k3s-data:/var/lib/rancher/k3s
+      - k3s-kubeconfig:/output
+      - ./bootstrap/compose/k3s/registries.yaml:/etc/rancher/k3s/registries.yaml:ro
+    ports:
+      - 127.0.0.1:6443:6443
+    depends_on:
+      - dns
+    healthcheck:
+      test: [CMD, kubectl, --kubeconfig, /output/kubeconfig.yaml, get, --raw, /readyz]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 15s
+    restart: unless-stopped
+
+  # Runs on every `up` once the API answers: kubeconfigs, platform manifests
+  # (namespaces, in-cluster Traefik, RBAC) and Prometheus's API token.
+  k3s-setup:
+    image: rancher/k3s:v1.31.4-k3s1
+    entrypoint: [/bin/sh, /setup/setup.sh]
+    volumes:
+      - ./bootstrap/compose/k3s:/setup:ro
+      - ./bootstrap/manifests:/manifests:ro
+      - k3s-kubeconfig:/output
+      - prometheus-k8s:/prometheus-k8s
+    depends_on:
+      k3s:
+        condition: service_healthy
+    restart: 'no'
+
+  # Pods use this as their upstream DNS (k3s --resolv-conf). It forwards to
+  # Docker's embedded DNS, which knows the Compose service names and asks the
+  # host's resolvers for everything else, so corporate DNS works in CI too.
+  dns:
+    image: coredns/coredns:1.11.3
+    command: [-conf, /etc/coredns/Corefile]
+    volumes:
+      - ./bootstrap/compose/dns/Corefile:/etc/coredns/Corefile:ro
+    networks:
+      default:
+        ipv4_address: ${ORBIT_NET_PREFIX:-10.213.0}.53
+    restart: unless-stopped
+
+  # ── Platform services ───────────────────────────────────────────────────────
+  # Images that CI builds. Pods push to registry:5000; the host and the kubelet
+  # use localhost:5001 (bootstrap/compose/k3s/registries.yaml mirrors it here).
+  registry:
+    image: registry:2.8.3
+    environment:
+      REGISTRY_STORAGE_DELETE_ENABLED: 'true'
+    volumes:
+      - registry-data:/var/lib/registry
+    ports:
+      - 127.0.0.1:5001:5000
+    restart: unless-stopped
+
+  # Git hosting for app repositories and the gitops repo. Headless install;
+  # the bootstrap creates the admin user, its token and the orgs.
+  gitea:
+    image: gitea/gitea:1.22.3
+    environment:
+      USER_UID: '1000'
+      USER_GID: '1000'
+      GITEA__database__DB_TYPE: sqlite3
+      GITEA__database__PATH: /data/gitea/gitea.db
+      GITEA__server__DOMAIN: git.${ORBIT_BASE_DOMAIN:-localtest.me}
+      GITEA__server__HTTP_PORT: '3000'
+      GITEA__server__ROOT_URL: http://git.${ORBIT_BASE_DOMAIN:-localtest.me}:${ORBIT_INGRESS_PORT:-8080}/
+      GITEA__server__DISABLE_SSH: 'true'
+      GITEA__server__START_SSH_SERVER: 'false'
+      GITEA__server__OFFLINE_MODE: 'true'
+      GITEA__server__LFS_START_SERVER: 'false'
+      GITEA__security__INSTALL_LOCK: 'true'
+      GITEA__security__SECRET_KEY: ${GITEA_SECRET_KEY:-}
+      GITEA__security__INTERNAL_TOKEN: ${GITEA_INTERNAL_TOKEN:-}
+      GITEA__service__DISABLE_REGISTRATION: 'true'
+      GITEA__service__REQUIRE_SIGNIN_VIEW: 'false'
+      # Basic auth is needed by the bootstrap to mint the first API token.
+      GITEA__service__ENABLE_BASIC_AUTHENTICATION: 'true'
+      GITEA__repository__DEFAULT_BRANCH: main
+      GITEA__repository__DEFAULT_PRIVATE: private
+      GITEA__webhook__ALLOWED_HOST_LIST: '*'
+      GITEA__webhook__SKIP_TLS_VERIFY: 'true'
+      GITEA__webhook__DELIVER_TIMEOUT: '10'
+      # Orbit runs its own CI engine; Gitea Actions stays off.
+      GITEA__actions__ENABLED: 'false'
+      # _0X2E_ encodes "." in a section name ([cron.update_checker]).
+      GITEA__cron_0X2E_update_checker__ENABLED: 'false'
+      GITEA__log__LEVEL: Info
+    volumes:
+      - gitea-data:/data
+    # Push webhooks go to the Orbit API on the host (ORBIT_WEBHOOK_URL).
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    healthcheck:
+      test: [CMD, curl, -fsS, -o, /dev/null, http://127.0.0.1:3000/api/healthz]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    restart: unless-stopped
+
+  # Floci, the local AWS cloud (https://github.com/floci-io/floci). Terraform
+  # creates each app's S3 bucket and SQS queue here. Only its in-process
+  # services are used, so it gets no Docker socket. The image has a healthcheck.
+  floci:
+    image: floci/floci:2.4.0
+    environment:
+      FLOCI_STORAGE_MODE: persistent
+      FLOCI_STORAGE_PERSISTENT_PATH: /app/data
+      # URLs in responses (SQS QueueUrl) must work from pods.
+      FLOCI_BASE_URL: http://floci:4566
+      FLOCI_DEFAULT_REGION: ${ORBIT_AWS_REGION:-us-east-1}
+    volumes:
+      - floci-data:/app/data
+    ports:
+      - 127.0.0.1:4566:4566
+    restart: unless-stopped
+
+  # Scrapes the k3s pods and nodes through the Kubernetes API server, and loads
+  # the alert rules Orbit writes to PROMETHEUS_RULES_DIR.
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+      - --web.enable-lifecycle
+      - --web.external-url=http://prometheus.${ORBIT_BASE_DOMAIN:-localtest.me}:${ORBIT_INGRESS_PORT:-8080}/
+      - --web.route-prefix=/
+    volumes:
+      - ./bootstrap/compose/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ${PROMETHEUS_RULES_DIR:-./.orbit-data/prometheus-rules}:/etc/prometheus/rules:ro
+      - prometheus-k8s:/etc/prometheus/k8s:ro
+      - prometheus-data:/prometheus
+    depends_on:
+      k3s-setup:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:9090/-/ready]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  # Orbit creates per-app dashboards through the HTTP API. Anonymous Viewer
+  # access is on so dashboard links from the portal open without a login.
+  grafana:
+    image: grafana/grafana:11.2.0
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_SERVER_DOMAIN: grafana.${ORBIT_BASE_DOMAIN:-localtest.me}
+      GF_SERVER_ROOT_URL: http://grafana.${ORBIT_BASE_DOMAIN:-localtest.me}:${ORBIT_INGRESS_PORT:-8080}/
+      GF_AUTH_ANONYMOUS_ENABLED: 'true'
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_AUTH_ANONYMOUS_ORG_NAME: Main Org.
+      GF_AUTH_BASIC_ENABLED: 'true'
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+      GF_SECURITY_ALLOW_EMBEDDING: 'true'
+      GF_ANALYTICS_REPORTING_ENABLED: 'false'
+      GF_ANALYTICS_CHECK_FOR_UPDATES: 'false'
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: 'false'
+      GF_NEWS_NEWS_FEED_ENABLED: 'false'
+    volumes:
+      - ./bootstrap/compose/grafana/datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml:ro
+      - grafana-data:/var/lib/grafana
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:3000/api/health]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    restart: unless-stopped
+
+  # The one entry point: http://*.localtest.me:8080. Routes are in
+  # bootstrap/compose/traefik/dynamic.yml. The aliases make the same URLs work
+  # from containers, so the Orbit container uses the URLs the browser uses.
+  traefik:
+    image: traefik:v3.1.2
+    command:
+      - --entrypoints.web.address=:${ORBIT_INGRESS_PORT:-8080}
+      - --entrypoints.traefik.address=:9000
+      - --entrypoints.metrics.address=:9100
+      - --providers.file.filename=/etc/traefik/dynamic.yml
+      - --providers.file.watch=true
+      - --ping=true
+      - --ping.entrypoint=traefik
+      - --metrics.prometheus=true
+      - --metrics.prometheus.entrypoint=metrics
+      - --log.level=INFO
+      - --global.checknewversion=false
+      - --global.sendanonymoususage=false
+    environment:
+      ORBIT_BASE_DOMAIN: ${ORBIT_BASE_DOMAIN:-localtest.me}
+    volumes:
+      - ./bootstrap/compose/traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
+    ports:
+      - 127.0.0.1:${ORBIT_INGRESS_PORT:-8080}:${ORBIT_INGRESS_PORT:-8080}
+    networks:
+      default:
+        aliases:
+          - git.${ORBIT_BASE_DOMAIN:-localtest.me}
+          - grafana.${ORBIT_BASE_DOMAIN:-localtest.me}
+          - prometheus.${ORBIT_BASE_DOMAIN:-localtest.me}
+          - aws.${ORBIT_BASE_DOMAIN:-localtest.me}
+    healthcheck:
+      test: [CMD, traefik, healthcheck, --ping, --ping.entrypoint=traefik, --entrypoints.traefik.address=:9000]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  # ── Orbit itself (optional) ─────────────────────────────────────────────────
+  # The API, workers and portal from the Dockerfile, on http://localhost:4000.
+  # It keeps its own data in the orbit-data volume, separate from `npm run dev`
+  # (.orbit-data/), and both use port 4000, so run one or the other.
+  orbit:
+    profiles: [orbit]
+    build: .
+    image: orbit-platform:local
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      ORBIT_HOST: 0.0.0.0
+      ORBIT_PORT: '4000'
+      ORBIT_PUBLIC_URL: http://localhost:${ORBIT_PORT:-4000}
+      ORBIT_PORTAL_URL: http://localhost:${ORBIT_PORT:-4000}
+      ORBIT_WEBHOOK_URL: http://orbit:4000/webhooks/gitea
+      ORBIT_DATA_DIR: /var/lib/orbit
+      PROMETHEUS_RULES_DIR: /var/lib/orbit-rules
+      KUBECONFIG: /k3s/orbit-compose.kubeconfig
+      ORBIT_KUBE_CONTEXT: orbit-compose
+      ORBIT_ALLOWED_KUBE_CONTEXTS: orbit-compose
+    volumes:
+      - orbit-data:/var/lib/orbit
+      - ${PROMETHEUS_RULES_DIR:-./.orbit-data/prometheus-rules}:/var/lib/orbit-rules
+      - k3s-kubeconfig:/k3s:ro
+    ports:
+      - 127.0.0.1:${ORBIT_PORT:-4000}:4000
+    depends_on:
+      k3s-setup:
+        condition: service_completed_successfully
+      gitea:
+        condition: service_healthy
+      traefik:
+        condition: service_healthy
+    restart: unless-stopped
+
+configs:
+  k3s-resolv-conf:
+    content: |
+      nameserver ${ORBIT_NET_PREFIX:-10.213.0}.53
+
+networks:
+  default:
+    ipam:
+      config:
+        # Fixed addresses (only dns, at .53) stay below .128; Docker hands out the rest.
+        - subnet: ${ORBIT_NET_PREFIX:-10.213.0}.0/24
+          ip_range: ${ORBIT_NET_PREFIX:-10.213.0}.128/25
+
+volumes:
+  k3s-data:
+  k3s-kubeconfig:
+  prometheus-k8s:
+  registry-data:
+  gitea-data:
+  floci-data:
+  prometheus-data:
+  grafana-data:
+  orbit-data:

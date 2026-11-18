@@ -1,0 +1,52 @@
+[
+  {
+    "Description": "AWS Access Key",
+    "StartLine": 3,
+    "EndLine": 3,
+    "StartColumn": 19,
+    "EndColumn": 38,
+    "Match": "aws_access_key_id = AKIAIOSFODNN7EXAMPLE",
+    "Secret": "AKIAIOSFODNN7EXAMPLE",
+    "File": "config/aws.env",
+    "SymlinkFile": "",
+    "Commit": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+    "Entropy": 3.684184,
+    "Author": "Dev Example",
+    "Email": "dev@example.com",
+    "Date": "2026-10-01T10:00:00Z",
+    "Message": "add aws config",
+    "Tags": [],
+    "RuleID": "aws-access-token",
+    "Fingerprint": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678:config/aws.env:aws-access-token:3"
+  },
+  {
+    "Description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "StartLine": 12,
+    "EndLine": 12,
+    "StartColumn": 17,
+    "EndColumn": 70,
+    "Match": "apiKey = \"orbit-test-secret-do-not-use-1234567890abcdef\"",
+    "Secret": "orbit-test-secret-do-not-use-1234567890abcdef",
+    "File": "./src/payments.js",
+    "SymlinkFile": "",
+    "Commit": "",
+    "Entropy": 4.2,
+    "Author": "",
+    "Email": "",
+    "Date": "",
+    "Message": "",
+    "Tags": [],
+    "RuleID": "generic-api-key",
+    "Fingerprint": "src/payments.js:generic-api-key:12"
+  },
+  {
+    "Description": "AWS Access Key",
+    "StartLine": 3,
+    "Match": "aws_access_key_id = AKIAIOSFODNN7EXAMPLE",
+    "Secret": "AKIAIOSFODNN7EXAMPLE",
+    "File": "config/aws.env",
+    "RuleID": "aws-access-token"
+  },
+  { "Description": "missing rule and file" },
+  "garbage"
+]

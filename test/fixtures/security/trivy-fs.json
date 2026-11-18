@@ -1,0 +1,113 @@
+{
+  "SchemaVersion": 2,
+  "CreatedAt": "2026-11-09T10:00:00.000000000Z",
+  "ArtifactName": "/workspace",
+  "ArtifactType": "filesystem",
+  "Results": [
+    {
+      "Target": "package-lock.json",
+      "Class": "lang-pkgs",
+      "Type": "npm",
+      "Vulnerabilities": [
+        {
+          "VulnerabilityID": "CVE-2024-45590",
+          "PkgID": "body-parser@1.20.2",
+          "PkgName": "body-parser",
+          "InstalledVersion": "1.20.2",
+          "FixedVersion": "1.20.3",
+          "Status": "fixed",
+          "Severity": "HIGH",
+          "Title": "body-parser: Denial of Service Vulnerability in body-parser",
+          "Description": "body-parser is Node.js body parsing middleware. body-parser <1.20.3 is vulnerable to denial of service when url encoding is enabled.",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2024-45590"
+        },
+        {
+          "VulnerabilityID": "CVE-2024-43796",
+          "PkgName": "express",
+          "InstalledVersion": "4.19.2",
+          "FixedVersion": "4.20.0, 5.0.0",
+          "Severity": "LOW",
+          "Title": "express: Improper Input Handling in Express Redirects",
+          "Description": "Express.js minimalist web framework for node. In express < 4.20.0, passing untrusted user input to response.redirect() may execute untrusted code.",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2024-43796"
+        },
+        {
+          "VulnerabilityID": "CVE-2024-4067",
+          "PkgName": "micromatch",
+          "InstalledVersion": "4.0.5",
+          "FixedVersion": "4.0.8",
+          "Severity": "MEDIUM",
+          "Title": "micromatch: vulnerable to Regular Expression Denial of Service",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2024-4067"
+        },
+        {
+          "VulnerabilityID": "GHSA-0000-orbit-test",
+          "PkgName": "left-pad-ng",
+          "InstalledVersion": "1.0.0",
+          "Severity": "UNKNOWN"
+        },
+        {
+          "VulnerabilityID": "CVE-2024-45590",
+          "PkgName": "body-parser",
+          "InstalledVersion": "1.20.2",
+          "FixedVersion": "1.20.3",
+          "Severity": "HIGH",
+          "Title": "body-parser: Denial of Service Vulnerability in body-parser"
+        },
+        { "VulnerabilityID": "CVE-0000-0000" },
+        42
+      ]
+    },
+    {
+      "Target": "Dockerfile",
+      "Class": "config",
+      "Type": "dockerfile",
+      "MisconfSummary": { "Successes": 20, "Failures": 2 },
+      "Misconfigurations": [
+        {
+          "Type": "Dockerfile Security Check",
+          "ID": "DS002",
+          "AVDID": "AVD-DS-0002",
+          "Title": "Image user should not be 'root'",
+          "Description": "Running containers with 'root' user can lead to a container escape situation.",
+          "Message": "Specify at least 1 USER command in Dockerfile with non-root user as argument",
+          "Resolution": "Add 'USER <non root user name>' line to the Dockerfile",
+          "Severity": "HIGH",
+          "PrimaryURL": "https://avd.aquasec.com/misconfig/ds002",
+          "Status": "FAIL"
+        },
+        {
+          "Type": "Dockerfile Security Check",
+          "ID": "DS026",
+          "AVDID": "AVD-DS-0026",
+          "Title": "No HEALTHCHECK defined",
+          "Message": "Add HEALTHCHECK instruction in your Dockerfile",
+          "Severity": "LOW",
+          "Status": "FAIL"
+        },
+        {
+          "Type": "Dockerfile Security Check",
+          "ID": "DS001",
+          "Title": "':latest' tag used",
+          "Severity": "MEDIUM",
+          "Status": "PASS"
+        }
+      ]
+    },
+    {
+      "Target": "src/config.js",
+      "Class": "secret",
+      "Secrets": [
+        {
+          "RuleID": "github-pat",
+          "Category": "GitHub",
+          "Severity": "CRITICAL",
+          "Title": "GitHub Personal Access Token",
+          "StartLine": 4,
+          "EndLine": 4,
+          "Match": "const token = \"ghp_orbitTestTokenNotRealAAAAAAAAAAAAAAAA\""
+        }
+      ]
+    }
+  ]
+}

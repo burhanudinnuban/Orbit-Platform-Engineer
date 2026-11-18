@@ -1,0 +1,62 @@
+{
+  "SchemaVersion": 2,
+  "CreatedAt": "2026-11-09T10:05:00.000000000Z",
+  "ArtifactName": "kind-registry:5000/payments:3f9c2ab",
+  "ArtifactType": "container_image",
+  "Metadata": {
+    "OS": { "Family": "alpine", "Name": "3.20.3" }
+  },
+  "Results": [
+    {
+      "Target": "kind-registry:5000/payments:3f9c2ab (alpine 3.20.3)",
+      "Class": "os-pkgs",
+      "Type": "alpine",
+      "Vulnerabilities": [
+        {
+          "VulnerabilityID": "CVE-2024-45491",
+          "PkgName": "libexpat",
+          "InstalledVersion": "2.6.2-r0",
+          "FixedVersion": "2.6.3-r0",
+          "Severity": "CRITICAL",
+          "Title": "libexpat: Integer Overflow or Wraparound",
+          "Description": "An issue was discovered in libexpat before 2.6.3. dtdCopy in xmlparse.c can have an integer overflow for nDefaultAtts on 32-bit platforms.",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2024-45491"
+        },
+        {
+          "VulnerabilityID": "CVE-2024-6119",
+          "PkgName": "libcrypto3",
+          "InstalledVersion": "3.3.1-r3",
+          "FixedVersion": "3.3.2-r0",
+          "Severity": "HIGH",
+          "Title": "openssl: Possible denial of service in X.509 name checks",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2024-6119"
+        },
+        {
+          "VulnerabilityID": "CVE-2024-9143",
+          "PkgName": "libssl3",
+          "InstalledVersion": "3.3.1-r3",
+          "FixedVersion": "3.3.2-r1",
+          "Severity": "MEDIUM",
+          "Title": "openssl: Low-level invalid GF(2^m) parameters lead to OOB memory access"
+        }
+      ]
+    },
+    {
+      "Target": "Node.js",
+      "Class": "lang-pkgs",
+      "Type": "node-pkg",
+      "Vulnerabilities": [
+        {
+          "VulnerabilityID": "CVE-2024-21538",
+          "PkgName": "cross-spawn",
+          "PkgPath": "usr/local/lib/node_modules/npm/node_modules/cross-spawn/package.json",
+          "InstalledVersion": "7.0.3",
+          "FixedVersion": "7.0.5, 6.0.6",
+          "Severity": "HIGH",
+          "Title": "cross-spawn: regular expression denial of service",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2024-21538"
+        }
+      ]
+    }
+  ]
+}

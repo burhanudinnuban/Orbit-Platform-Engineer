@@ -1,0 +1,5 @@
+id: python-service
+name: Python service
+description: FastAPI HTTP service with Prometheus metrics, health checks and tests
+language: python
+port: 8080

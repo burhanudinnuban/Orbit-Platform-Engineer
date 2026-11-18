@@ -1,0 +1,93 @@
+{
+  "@programName": "ZAP",
+  "@version": "2.15.0",
+  "@generated": "Mon, 9 Nov 2026 10:10:00",
+  "site": [
+    {
+      "@name": "http://payments.payments-dev.svc.cluster.local",
+      "@host": "payments.payments-dev.svc.cluster.local",
+      "@port": "80",
+      "@ssl": "false",
+      "alerts": [
+        {
+          "pluginid": "10038",
+          "alertRef": "10038-1",
+          "alert": "Content Security Policy (CSP) Header Not Set",
+          "name": "Content Security Policy (CSP) Header Not Set",
+          "riskcode": "2",
+          "confidence": "3",
+          "riskdesc": "Medium (High)",
+          "desc": "<p>Content Security Policy (CSP) is an added layer of security that helps to detect and mitigate certain types of attacks, including Cross Site Scripting (XSS) &amp; data injection attacks.</p>",
+          "instances": [
+            { "uri": "http://payments.payments-dev.svc.cluster.local/", "method": "GET", "param": "", "attack": "", "evidence": "", "otherinfo": "" },
+            { "uri": "http://payments.payments-dev.svc.cluster.local/robots.txt", "method": "GET", "param": "", "attack": "", "evidence": "", "otherinfo": "" },
+            { "uri": "http://payments.payments-dev.svc.cluster.local/sitemap.xml", "method": "GET", "param": "", "attack": "", "evidence": "", "otherinfo": "" }
+          ],
+          "count": "3",
+          "solution": "<p>Ensure that your web server, application server, load balancer, etc. is configured to set the Content-Security-Policy header.</p>",
+          "otherinfo": "",
+          "reference": "<p>https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP</p>",
+          "cweid": "693",
+          "wascid": "15",
+          "sourceid": "3"
+        },
+        {
+          "pluginid": "10021",
+          "alertRef": "10021",
+          "alert": "X-Content-Type-Options Header Missing",
+          "name": "X-Content-Type-Options Header Missing",
+          "riskcode": "1",
+          "confidence": "2",
+          "riskdesc": "Low (Medium)",
+          "desc": "<p>The Anti-MIME-Sniffing header X-Content-Type-Options was not set to 'nosniff'.</p><p>This allows older versions of Internet Explorer and Chrome to perform MIME-sniffing.</p>",
+          "instances": [
+            { "uri": "http://payments.payments-dev.svc.cluster.local/", "method": "GET", "param": "x-content-type-options", "attack": "", "evidence": "", "otherinfo": "" }
+          ],
+          "count": "1",
+          "solution": "<p>Ensure that the application/web server sets the Content-Type header appropriately, and that it sets the X-Content-Type-Options header to 'nosniff' for all web pages.</p>",
+          "cweid": "693",
+          "wascid": "15",
+          "sourceid": "3"
+        },
+        {
+          "pluginid": "10062",
+          "alertRef": "10062",
+          "alert": "PII Disclosure",
+          "name": "PII Disclosure",
+          "riskcode": "3",
+          "confidence": "3",
+          "riskdesc": "High (High)",
+          "desc": "<p>The response contains Personally Identifiable Information, such as CC number, SSN and similar sensitive information.</p>",
+          "instances": [
+            { "uri": "http://payments.payments-dev.svc.cluster.local/api/customers", "method": "GET", "param": "", "attack": "", "evidence": "4111111111111111", "otherinfo": "Credit Card Type detected: Visa" }
+          ],
+          "count": "1",
+          "solution": "<p>Check the response for the potential presence of personally identifiable information (PII), ensure nothing sensitive is leaked by the application.</p>",
+          "cweid": "359",
+          "wascid": "13",
+          "sourceid": "4"
+        },
+        {
+          "pluginid": "10109",
+          "alertRef": "10109",
+          "alert": "Modern Web Application",
+          "name": "Modern Web Application",
+          "riskcode": "0",
+          "confidence": "2",
+          "riskdesc": "Informational (Medium)",
+          "desc": "<p>The application appears to be a modern web application. If you need to explore it automatically then the Ajax Spider may well be more effective than the standard one.</p>",
+          "instances": [
+            { "uri": "http://payments.payments-dev.svc.cluster.local/", "method": "GET", "param": "", "attack": "", "evidence": "<script src=\"/app.js\"></script>", "otherinfo": "" }
+          ],
+          "count": "1",
+          "solution": "<p>This is an informational alert and so no changes are required.</p>",
+          "cweid": "-1",
+          "wascid": "-1",
+          "sourceid": "5"
+        },
+        "not-an-alert",
+        { "alert": "Alert without plugin id or ref", "riskcode": "3" }
+      ]
+    }
+  ]
+}

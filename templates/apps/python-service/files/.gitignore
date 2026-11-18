@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+.orbit-reports/
+.env
+.env.*
+!.env.example
+.DS_Store

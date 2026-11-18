@@ -1,0 +1,104 @@
+# Prometheus for Orbit on Docker Compose.
+#
+# Pod IPs live inside the k3s container, so pods and nodes are discovered
+# through the Kubernetes API and scraped through the API server proxy, with the
+# token that k3s-setup writes to /etc/prometheus/k8s. The resulting labels
+# (namespace, pod, app, env) are the same as with an in-cluster Prometheus.
+#
+# Orbit writes one alert rule file per app environment into the rules
+# directory (PROMETHEUS_RULES_DIR) and then calls /-/reload.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: orbit
+
+rule_files:
+  - /etc/prometheus/rules/*.yaml
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: traefik-edge
+    static_configs:
+      - targets: ["traefik:9100"]
+
+  # Any pod annotated prometheus.io/scrape: "true" (Orbit app templates are).
+  - job_name: kubernetes-pods
+    kubernetes_sd_configs:
+      - role: pod
+        api_server: https://k3s:6443
+        authorization:
+          credentials_file: /etc/prometheus/k8s/token
+        tls_config:
+          ca_file: /etc/prometheus/k8s/ca.crt
+    scheme: https
+    authorization:
+      credentials_file: /etc/prometheus/k8s/token
+    tls_config:
+      ca_file: /etc/prometheus/k8s/ca.crt
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: "true"
+      - source_labels: [__meta_kubernetes_pod_phase]
+        action: drop
+        regex: Pending|Succeeded|Failed
+      # The proxy path needs a port; there is nothing to scrape without one.
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: keep
+        regex: "[0-9]+"
+      - source_labels: [__meta_kubernetes_pod_ip, __meta_kubernetes_pod_annotation_prometheus_io_port]
+        separator: ":"
+        target_label: instance
+      # /metrics unless the pod sets prometheus.io/path.
+      - target_label: __tmp_metrics_path
+        replacement: /metrics
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+        regex: (.+)
+        target_label: __tmp_metrics_path
+      - source_labels:
+          - __meta_kubernetes_namespace
+          - __meta_kubernetes_pod_name
+          - __meta_kubernetes_pod_annotation_prometheus_io_port
+          - __tmp_metrics_path
+        regex: (.+);(.+);(.+);(.+)
+        target_label: __metrics_path__
+        replacement: /api/v1/namespaces/$1/pods/$2:$3/proxy$4
+      - target_label: __address__
+        replacement: k3s:6443
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+      - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+        target_label: app
+      - source_labels: [__meta_kubernetes_pod_label_orbit_dev_env]
+        target_label: env
+
+  # Container CPU and memory (container_cpu_usage_seconds_total,
+  # container_memory_working_set_bytes) through the API server node proxy.
+  - job_name: kubernetes-cadvisor
+    kubernetes_sd_configs:
+      - role: node
+        api_server: https://k3s:6443
+        authorization:
+          credentials_file: /etc/prometheus/k8s/token
+        tls_config:
+          ca_file: /etc/prometheus/k8s/ca.crt
+    scheme: https
+    authorization:
+      credentials_file: /etc/prometheus/k8s/token
+    tls_config:
+      ca_file: /etc/prometheus/k8s/ca.crt
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_node_name]
+        target_label: node
+      - target_label: __address__
+        replacement: k3s:6443
+      - source_labels: [__meta_kubernetes_node_name]
+        regex: (.+)
+        target_label: __metrics_path__
+        replacement: /api/v1/nodes/$1/proxy/metrics/cadvisor

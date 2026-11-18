@@ -1,0 +1,141 @@
+# Floci: the local AWS cloud (https://github.com/floci-io/floci, MIT).
+# An AWS API emulator on port 4566. Orbit's Terraform module app-cloud creates
+# each app's S3 bucket and SQS queue here, exactly as it would on real AWS.
+#   in the cluster:  http://floci.orbit-system.svc.cluster.local:4566
+#   from the host:   http://aws.localtest.me:8080 (through Traefik)
+# Only Floci's in-process services (S3, SQS, SNS, DynamoDB, Secrets Manager, SSM,
+# IAM, STS...) work here. Container-backed ones (RDS, Lambda, EKS, ECS) need a
+# Docker socket, which this pod deliberately does not get.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: floci-data
+  namespace: orbit-system
+  labels:
+    app.kubernetes.io/name: floci
+    app.kubernetes.io/managed-by: orbit
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: floci
+  namespace: orbit-system
+  labels:
+    app.kubernetes.io/name: floci
+    app.kubernetes.io/managed-by: orbit
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: floci
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: floci
+    spec:
+      # Floci needs no Kubernetes API access (Lambda, which would schedule pods, is unused).
+      automountServiceAccountToken: false
+      # Same identity as Floci's own Helm chart.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: floci
+          image: floci/floci:2.4.0
+          ports:
+            - name: aws
+              containerPort: 4566
+              protocol: TCP
+          env:
+            # Resources survive restarts, so they stay in step with the Terraform
+            # state Orbit keeps in orbit-system.
+            - name: FLOCI_STORAGE_MODE
+              value: persistent
+            - name: FLOCI_STORAGE_PERSISTENT_PATH
+              value: /app/data
+            # URLs in responses (SQS QueueUrl) must work from pods.
+            - name: FLOCI_BASE_URL
+              value: http://floci.orbit-system.svc.cluster.local:4566
+            - name: FLOCI_DEFAULT_REGION
+              value: us-east-1
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+          # TCP probes: Floci's health path has moved between releases
+          # (/_floci/health, /_localstack/health), and the port is enough here.
+          readinessProbe:
+            tcpSocket:
+              port: aws
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: aws
+            initialDelaySeconds: 20
+            periodSeconds: 15
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: floci-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: floci
+  namespace: orbit-system
+  labels:
+    app.kubernetes.io/name: floci
+    app.kubernetes.io/managed-by: orbit
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: floci
+  ports:
+    - name: aws
+      port: 4566
+      targetPort: aws
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: floci
+  namespace: orbit-system
+  labels:
+    app.kubernetes.io/name: floci
+    app.kubernetes.io/managed-by: orbit
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: aws.localtest.me
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: floci
+                port:
+                  name: aws

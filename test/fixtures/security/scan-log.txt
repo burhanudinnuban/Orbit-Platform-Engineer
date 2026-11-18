@@ -1,0 +1,30 @@
++ mkdir -p /workspace/.orbit-reports
+Cloning http://orbit-admin:s3cr3t-token-value@gitea.orbit-system.svc.cluster.local:3000/apps/payments.git into /workspace
+HEAD is now at 3f9c2ab add payments endpoint
+Scanning with semgrep 1.85.0 (registry rules: p/default)
+::orbit-report-begin::semgrep
+{"version":"1.85.0","results":[{"check_id":"javascript.express.security.audit.xss.direct-response-write.direct-response-write","path":"src/index.js","start":{"line":42,"col":5},"end":{"line":42,"col":30},"extra":{"message":"Detected directly writing to a Response object from user-defined input.","severity":"WARNING","metadata":{"confidence":"MEDIUM","impact":"MEDIUM"}}}],"errors":[]}
+::orbit-report-end::semgrep
+some scanner noise in between blocks
+::orbit-report-begin::gitleaks
+[
+  {
+    "Description": "AWS Access Key",
+    "RuleID": "aws-access-token",
+    "File": "config/aws.env",
+    "StartLine": 3,
+    "Secret": "AKIAIOSFODNN7EXAMPLE"
+  }
+]
+::orbit-report-end::gitleaks
+::orbit-report-begin::bandit
+{"results": []}
+::orbit-report-end::bandit
+::orbit-report-begin::trivy-fs
+{"SchemaVersion":2,"ArtifactType":"filesystem","Results":[]}::orbit-report-end::trivy-fs
+::orbit-report-begin::zap
+{"site":[{"@name":"http://payments.payments-dev.svc.cluster.local","alerts":[{"pluginid":"10038","alertRef":"10038-1","alert":"Content Security Policy (CSP) Header Not Set","riskcode":"2","desc":"<p>CSP is missing.</p>","instances":[{"uri":"http://payments.payments-dev.svc.cluster.local/","method":"GET"}]}]}]}
+::orbit-report-end::zap
+all reports printed
+::orbit-report-begin::trivy-image
+{"SchemaVersion":2,"Results":[

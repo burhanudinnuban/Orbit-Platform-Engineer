@@ -1,0 +1,27 @@
+# Orbit CI/CD pipeline. Every push to main runs these stages in order.
+# Spec: docs/architecture.md → "Pipeline spec" in the Orbit platform repo.
+version: 1
+stages:
+  - name: test
+    type: script
+    image: node:26-alpine
+    script:
+      - npm ci
+      - npm test
+
+  - name: build
+    type: build
+    dockerfile: Dockerfile
+    context: .
+
+  - name: security
+    type: scan
+    scanners: [semgrep, gitleaks, trivy-fs, trivy-image]
+
+  - name: deploy-dev
+    type: deploy
+    environment: dev
+
+  - name: dast-dev
+    type: dast
+    environment: dev

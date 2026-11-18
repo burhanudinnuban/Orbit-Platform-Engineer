@@ -1,0 +1,16 @@
+node_modules
+npm-debug.log*
+.next
+.git
+.gitignore
+.orbit
+.orbit-reports
+test
+coverage
+Dockerfile
+.dockerignore
+.env
+.env.*
+*.md
+*.tsbuildinfo
+next-env.d.ts

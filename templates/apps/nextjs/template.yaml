@@ -1,0 +1,5 @@
+id: nextjs
+name: Next.js app
+description: Next.js (App Router) web app with Prometheus metrics, health checks and tests
+port: 8080
+languages: [typescript, javascript]

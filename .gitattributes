@@ -1,0 +1,11 @@
+# These files run on Linux (containers, the k3s node). A CRLF checkout on
+# Windows would reach them as `\r`-terminated lines: bootstrap/compose/k3s/setup.sh
+# fails with "set: illegal option -" and the Corefile does not parse.
+*.sh          text eol=lf
+Corefile      text eol=lf
+Dockerfile    text eol=lf
+*.yaml        text eol=lf
+*.yml         text eol=lf
+*.tf          text eol=lf
+*.mjs         text eol=lf
+.env.example  text eol=lf

@@ -1,0 +1,16 @@
+.git
+.gitignore
+.orbit
+.orbit-reports
+.venv
+venv
+__pycache__
+*.pyc
+.pytest_cache
+tests
+requirements-dev.txt
+Dockerfile
+.dockerignore
+.env
+.env.*
+*.md
